@@ -24,13 +24,15 @@ public class TinyImageKNNClassifier {
 
     private void train() {
         List<double[]> featureVectors = new ArrayList<>();
+        /*
         for(String group : this.trainingImages.getGroups()) {
             for (FImage trainingImage : this.trainingImages.get(group)) {
                 double[] featureVector = getFeatureVector(trainingImage);
                 featureVectors.add(featureVector);
                 featureVectorGroups.add(group);
-            } 
+            }
         }
+         */
         this.trainingImages.getGroups().forEach(group ->
             this.trainingImages.get(group).forEach(trainingImage -> {
                     featureVectors.add(getFeatureVector(trainingImage));
