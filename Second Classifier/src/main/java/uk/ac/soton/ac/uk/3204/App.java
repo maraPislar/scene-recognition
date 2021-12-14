@@ -32,7 +32,11 @@ public class App {
         // Building the vocabulary with the training data
         HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiliser(images);
 
-        BagOfVisualWords<float[]> bagOfVisualWords = new BagOfVisualWords<>(assigner);
+        BagOfVisualWords<float[]> bagOfVisualWords = new BagOfVisualWords<>(assigner); //?
+        FeatureExtractor<DoubleFV, FImage> extractor = new Extractor(assigner);
+        
+        LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(extractor, LiblinearAnnotator.Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
+        ann.train(images);
         
     }
 
@@ -105,6 +109,24 @@ public class App {
         }
 
         return randomList;
+    }
+        static class Extractor implements FeatureExtractor<DoubleFV, FImage> {
+        //PyramidDenseSIFT<FImage> pdsift;
+        HardAssigner<float[], float[], IntFloatPair> assigner;
+
+        public Extractor(HardAssigner<float[], float[], IntFloatPair> assigner)
+        {
+            this.assigner = assigner;
+        }
+
+        @Override
+        public DoubleFV extractFeature(FImage image) {
+
+            final BagOfVisualWords<float[]> bagOfVisualWords = new BagOfVisualWords<float[]>(assigner);
+            final BlockSpatialAggregator<float[], SparseIntFV> blockSpatial = new BlockSpatialAggregator<float[], SparseIntFV>(bagOfVisualWords, 2, 2);
+            final List<LocalFeature<SpatialLocation, FloatFV>> extractedFeature = patchExtraction(image);
+            return blockSpatial.aggregate(extractedFeature, image.getBounds()).normaliseFV();
+        }
     }
 }
 
