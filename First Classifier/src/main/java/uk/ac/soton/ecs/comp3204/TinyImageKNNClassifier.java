@@ -2,6 +2,7 @@ package uk.ac.soton.ecs.comp3204;
 
 import org.apache.lucene.analysis.util.CharArrayMap;
 import org.openimaj.data.dataset.GroupedDataset;
+import org.openimaj.data.dataset.ListDataset;
 import org.openimaj.data.dataset.VFSGroupDataset;
 import org.openimaj.feature.DoubleFV;
 import org.openimaj.image.FImage;
@@ -12,30 +13,29 @@ import org.openimaj.util.pair.IntDoublePair;
 
 import java.util.*;
 
-public class TinyImageKNNClassifier {
-    private final VFSGroupDataset<FImage> trainingImages;
-    private DoubleNearestNeighboursExact kNearestNeighbours;
+public class TinyImageKNNClassifier implements Classifier {
+    private final int k;
+    private List<double[]> featureVectors = new ArrayList<>();
     private List<String> featureVectorGroups = new ArrayList<>();
+    private DoubleNearestNeighboursExact kNearestNeighbours;
 
-    public TinyImageKNNClassifier(VFSGroupDataset<FImage> trainingImages) {
-        this.trainingImages = trainingImages;
-        this.train();
+    public TinyImageKNNClassifier(int k) {
+        this.k = k;
     }
 
-    private void train() {
-        List<double[]> featureVectors = new ArrayList<>();
-
-        this.trainingImages.getGroups().forEach(group ->
-            this.trainingImages.get(group).forEach(trainingImage -> {
-                    featureVectors.add(getFeatureVector(trainingImage));
-                    featureVectorGroups.add(group);
+    @Override
+    public void train(GroupedDataset<String, ListDataset<FImage>, FImage> trainingImages) {
+        trainingImages.getGroups().forEach(group ->
+            trainingImages.get(group).forEach(trainingImage -> {
+                    this.featureVectors.add(getFeatureVector(trainingImage));
+                    this.featureVectorGroups.add(group);
                 }
             ));
 
-        double[][] featureVectorsArray = new double[featureVectors.size()][featureVectors.get(0).length];
-        featureVectors.toArray(featureVectorsArray);
+        double[][] featureVectorsArray = new double[this.featureVectors.size()][this.featureVectors.get(0).length];
+        this.featureVectors.toArray(featureVectorsArray);
 
-        kNearestNeighbours = new DoubleNearestNeighboursExact(featureVectorsArray);
+        this.kNearestNeighbours = new DoubleNearestNeighboursExact(featureVectorsArray);
     }
 
     private static double[] getFeatureVector(FImage image) {
@@ -49,9 +49,10 @@ public class TinyImageKNNClassifier {
         return featureVector.values;
     }
 
-    public String classify(FImage image, int k) {
+    @Override
+    public String classify(FImage image) {
         double[] imageFeatureVector = getFeatureVector(image);
-        List<IntDoublePair> neighbours = kNearestNeighbours.searchKNN(imageFeatureVector, k);
+        List<IntDoublePair> neighbours = this.kNearestNeighbours.searchKNN(imageFeatureVector, k);
 
         Map<String, Integer> neighboursGroupCount = new HashMap<>();
 
