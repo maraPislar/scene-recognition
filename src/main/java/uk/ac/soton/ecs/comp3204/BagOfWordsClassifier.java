@@ -3,6 +3,8 @@ package uk.ac.soton.ecs.comp3204;
 import de.bwaldvogel.liblinear.SolverType;
 import org.apache.commons.vfs2.FileSystemException;
 import org.openimaj.data.dataset.Dataset;
+import org.openimaj.data.dataset.GroupedDataset;
+import org.openimaj.data.dataset.ListDataset;
 import org.openimaj.data.dataset.VFSGroupDataset;
 import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
 import org.openimaj.experiment.evaluation.classification.ClassificationEvaluator;
@@ -35,29 +37,26 @@ import java.util.Map;
 import java.util.Random;
 
 
-public class BagOfWordsClassifier {
-    public static void main( String[] args ) throws FileSystemException {
-        // Loading the dataset
-        VFSGroupDataset<FImage> images = new VFSGroupDataset<>("D:\\Uni\\Year 3\\Vision\\coursework3\\training", ImageUtilities.FIMAGE_READER);
-        // Randomly splitting the training data into 80:20 training:testing ratio
-        GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<>(images, 80, 0, 20);
-        // VFSGroupDataset<FImage> testing = new VFSGroupDataset<>("D:\\Uni\\Year 3\\Vision\\coursework3\\testing", ImageUtilities.FIMAGE_READER);
+public class BagOfWordsClassifier implements Classifier {
+    private LiblinearAnnotator<FImage, String> ann;
 
+    @Override
+    public void train(GroupedDataset<String, ListDataset<FImage>, FImage> trainingImages) {
         // Building the vocabulary with the training data
-        HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiliser(splits.getTrainingDataset());
+        HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiliser(trainingImages);
+
         FeatureExtractor<DoubleFV, FImage> extractor = new Extractor(assigner);
 
         // Constructing and training a linear classifier
-        LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<>(extractor, LiblinearAnnotator.Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
-        ann.train(splits.getTrainingDataset());
-
-        // Evaluating OpenImaj evaluation framework
-        ClassificationEvaluator<CMResult<String>, String, FImage> eval = new ClassificationEvaluator<>( ann, splits.getTestDataset(), new CMAnalyser<>(CMAnalyser.Strategy.SINGLE));
-        Map<FImage, ClassificationResult<String>> guesses = eval.evaluate();
-        CMResult<String> result = eval.analyse(guesses);
-        System.out.println(result);
+        this.ann = new LiblinearAnnotator<>(extractor, LiblinearAnnotator.Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
+        ann.train(trainingImages);
     }
 
+    @Override
+    public String classify(FImage image) {
+        ClassificationResult<String> result = this.ann.classify(image);
+        return result.getPredictedClasses().iterator().next();
+    }
 
     // Method for patch extraction
     static List<LocalFeature<SpatialLocation, FloatFV>> patchExtraction(FImage image){
