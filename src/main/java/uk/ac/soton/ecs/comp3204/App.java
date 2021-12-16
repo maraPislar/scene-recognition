@@ -19,8 +19,9 @@ public class App {
                 ImageUtilities.FIMAGE_READER);
 
         Classifier knnClassifier = new TinyImageKNNClassifier(5);
-        System.out.println(testClassifier(knnClassifier, images));
-        
+        Classifier bagOfWordsClassifier = new BagOfWordsClassifier();
+        //System.out.println(testClassifier(knnClassifier, images));
+        System.out.println(testClassifier(bagOfWordsClassifier, images));
     }
 
     private static double testClassifier(Classifier classifier, VFSGroupDataset<FImage> images) {
