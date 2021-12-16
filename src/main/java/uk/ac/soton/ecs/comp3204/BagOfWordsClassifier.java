@@ -1,4 +1,4 @@
-package uk.ac.soton.ac.uk.3204;
+package uk.ac.soton.ecs.comp3204;
 
 import de.bwaldvogel.liblinear.SolverType;
 import org.apache.commons.vfs2.FileSystemException;
@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Random;
 
 
-public class App {
+public class BagOfWordsClassifier {
     public static void main( String[] args ) throws FileSystemException {
         // Loading the dataset
         VFSGroupDataset<FImage> images = new VFSGroupDataset<>("D:\\Uni\\Year 3\\Vision\\coursework3\\training", ImageUtilities.FIMAGE_READER);
