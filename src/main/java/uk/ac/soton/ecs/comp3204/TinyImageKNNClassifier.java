@@ -1,9 +1,7 @@
 package uk.ac.soton.ecs.comp3204;
 
-import org.apache.lucene.analysis.util.CharArrayMap;
 import org.openimaj.data.dataset.GroupedDataset;
 import org.openimaj.data.dataset.ListDataset;
-import org.openimaj.data.dataset.VFSGroupDataset;
 import org.openimaj.feature.DoubleFV;
 import org.openimaj.image.FImage;
 import org.openimaj.image.processing.resize.ResizeProcessor;
@@ -27,10 +25,10 @@ public class TinyImageKNNClassifier implements Classifier {
     public void train(GroupedDataset<String, ListDataset<FImage>, FImage> trainingImages) {
         trainingImages.getGroups().forEach(group ->
             trainingImages.get(group).forEach(trainingImage -> {
-                    this.featureVectors.add(getFeatureVector(trainingImage));
-                    this.featureVectorGroups.add(group);
-                }
-            ));
+                this.featureVectors.add(getFeatureVector(trainingImage));
+                this.featureVectorGroups.add(group);
+            })
+        );
 
         double[][] featureVectorsArray = new double[this.featureVectors.size()][this.featureVectors.get(0).length];
         this.featureVectors.toArray(featureVectorsArray);
