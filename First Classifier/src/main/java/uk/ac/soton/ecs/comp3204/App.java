@@ -1,31 +1,46 @@
 package uk.ac.soton.ecs.comp3204;
 
-import org.openimaj.image.DisplayUtilities;
-import org.openimaj.image.MBFImage;
-import org.openimaj.image.colour.ColourSpace;
-import org.openimaj.image.colour.RGBColour;
-import org.openimaj.image.processing.convolution.FGaussianConvolve;
-import org.openimaj.image.typography.hershey.HersheyFont;
+import org.apache.commons.vfs2.FileSystemException;
+import org.openimaj.data.dataset.VFSGroupDataset;
+import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
+import org.openimaj.image.FImage;
+import org.openimaj.image.ImageUtilities;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * OpenIMAJ Hello world!
  *
  */
 public class App {
-    public static void main( String[] args ) {
-    	//Create an image
-        MBFImage image = new MBFImage(320,70, ColourSpace.RGB);
+    public static void main( String[] args ) throws FileSystemException {
+        VFSGroupDataset<FImage> images = new VFSGroupDataset<FImage>(
+                "C:/Users/prana/University/Computer Vision/Group Project/training/training",
+                ImageUtilities.FIMAGE_READER);
 
-        //Fill the image with white
-        image.fill(RGBColour.WHITE);
-        		        
-        //Render some test into the image
-        image.drawText("Hello World", 10, 60, HersheyFont.CURSIVE, 50, RGBColour.BLACK);
-
-        //Apply a Gaussian blur
-        image.processInplace(new FGaussianConvolve(2f));
+        Classifier knnClassifier = new TinyImageKNNClassifier(5);
+        System.out.println(testClassifier(knnClassifier, images));
         
-        //Display the image
-        DisplayUtilities.display(image);
     }
+
+    private static double testClassifier(Classifier classifier, VFSGroupDataset<FImage> images) {
+        GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String, FImage>(images, 80, 0, 20);
+        classifier.train(splits.getTrainingDataset());
+
+        AtomicInteger correct = new AtomicInteger();
+        AtomicInteger total = new AtomicInteger();
+        splits.getTestDataset().getGroups().forEach(group ->
+                splits.getTestDataset().get(group).forEach(testingImage -> {
+                            if(classifier.classify(testingImage).equals(group)) {
+                                correct.getAndIncrement();
+                            }
+                            total.getAndIncrement();
+                        }
+                ));
+
+        return correct.doubleValue() / total.doubleValue();
+    }
+
+
+
 }
