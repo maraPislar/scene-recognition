@@ -1,31 +1,147 @@
 package uk.ac.soton.ac.uk.3204;
 
-import org.openimaj.image.DisplayUtilities;
-import org.openimaj.image.MBFImage;
-import org.openimaj.image.colour.ColourSpace;
-import org.openimaj.image.colour.RGBColour;
-import org.openimaj.image.processing.convolution.FGaussianConvolve;
-import org.openimaj.image.typography.hershey.HersheyFont;
+import de.bwaldvogel.liblinear.SolverType;
+import org.apache.commons.vfs2.FileSystemException;
+import org.openimaj.data.dataset.Dataset;
+import org.openimaj.data.dataset.VFSGroupDataset;
+import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
+import org.openimaj.experiment.evaluation.classification.ClassificationEvaluator;
+import org.openimaj.experiment.evaluation.classification.ClassificationResult;
+import org.openimaj.experiment.evaluation.classification.analysers.confusionmatrix.CMAnalyser;
+import org.openimaj.experiment.evaluation.classification.analysers.confusionmatrix.CMResult;
+import org.openimaj.feature.DoubleFV;
+import org.openimaj.feature.FeatureExtractor;
+import org.openimaj.feature.FloatFV;
+import org.openimaj.feature.SparseIntFV;
+import org.openimaj.feature.local.LocalFeature;
+import org.openimaj.feature.local.LocalFeatureImpl;
+import org.openimaj.feature.local.SpatialLocation;
+import org.openimaj.image.FImage;
+import org.openimaj.image.ImageUtilities;
+import org.openimaj.image.feature.local.aggregate.BagOfVisualWords;
+import org.openimaj.image.feature.local.aggregate.BlockSpatialAggregator;
+import org.openimaj.image.pixel.sampling.RectangleSampler;
+import org.openimaj.math.geometry.shape.Rectangle;
+import org.openimaj.ml.annotation.linear.LiblinearAnnotator;
+import org.openimaj.ml.clustering.FloatCentroidsResult;
+import org.openimaj.ml.clustering.assignment.HardAssigner;
+import org.openimaj.ml.clustering.kmeans.FloatKMeans;
+import org.openimaj.util.array.ArrayUtils;
+import org.openimaj.util.pair.IntFloatPair;
 
-/**
- * OpenIMAJ Hello world!
- *
- */
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+
 public class App {
-    public static void main( String[] args ) {
-    	//Create an image
-        MBFImage image = new MBFImage(320,70, ColourSpace.RGB);
+    public static void main( String[] args ) throws FileSystemException {
+        // Loading the dataset
+        VFSGroupDataset<FImage> images = new VFSGroupDataset<>("D:\\Uni\\Year 3\\Vision\\coursework3\\training", ImageUtilities.FIMAGE_READER);
+        // Randomly splitting the training data into 80:20 training:testing ratio
+        GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<>(images, 80, 0, 20);
+        // VFSGroupDataset<FImage> testing = new VFSGroupDataset<>("D:\\Uni\\Year 3\\Vision\\coursework3\\testing", ImageUtilities.FIMAGE_READER);
 
-        //Fill the image with white
-        image.fill(RGBColour.WHITE);
-        		        
-        //Render some test into the image
-        image.drawText("Hello World", 10, 60, HersheyFont.CURSIVE, 50, RGBColour.BLACK);
+        // Building the vocabulary with the training data
+        HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiliser(splits.getTrainingDataset());
+        FeatureExtractor<DoubleFV, FImage> extractor = new Extractor(assigner);
 
-        //Apply a Gaussian blur
-        image.processInplace(new FGaussianConvolve(2f));
-        
-        //Display the image
-        DisplayUtilities.display(image);
+        // Constructing and training a linear classifier
+        LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<>(extractor, LiblinearAnnotator.Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
+        ann.train(splits.getTrainingDataset());
+
+        // Evaluating OpenImaj evaluation framework
+        ClassificationEvaluator<CMResult<String>, String, FImage> eval = new ClassificationEvaluator<>( ann, splits.getTestDataset(), new CMAnalyser<>(CMAnalyser.Strategy.SINGLE));
+        Map<FImage, ClassificationResult<String>> guesses = eval.evaluate();
+        CMResult<String> result = eval.analyse(guesses);
+        System.out.println(result);
+    }
+
+
+    // Method for patch extraction
+    static List<LocalFeature<SpatialLocation, FloatFV>> patchExtraction(FImage image){
+
+        final List<LocalFeature<SpatialLocation, FloatFV>> patchList = new ArrayList<>();
+        RectangleSampler rec = new RectangleSampler(image.normalise(), 4, 4, 8, 8);
+
+        for(Rectangle rectangle : rec.allRectangles()){
+            // Extracting a rectangular region of interest from an image
+            FImage patch = image.extractROI(rectangle);
+
+            // Reshape a 2D array into a 1D array
+            final float[] vector = ArrayUtils.reshape(patch.pixels);
+            final FloatFV featureV = new FloatFV(vector);
+
+            // Assigning same location for rectangle and feature
+            final SpatialLocation sl = new SpatialLocation(rectangle.x, rectangle.y);
+
+            // Make the newly found feature local
+            final LocalFeature<SpatialLocation, FloatFV> lf = new LocalFeatureImpl<>(sl, featureV);
+
+            // Add the feature to a list
+            patchList.add(lf);
+        }
+        return patchList;
+    }
+
+
+
+    // Hard assigner from Chapter 12 from the OpenImaj Tutorial
+    static HardAssigner<float[], float[], IntFloatPair> trainQuantiliser(Dataset<FImage> sample){
+        List<float[]> allKeys = new ArrayList<>(); // patches flattened into vectors
+
+        for(FImage img : sample){
+            FImage image = img.getImage();
+            // Getting a sample of random patches
+            List<LocalFeature<SpatialLocation, FloatFV>> samplePatches = getRandomElements(patchExtraction(image), 15);
+            // Putting the vector values of the feature vectors in a list
+            for(LocalFeature<SpatialLocation, FloatFV> localFeature : samplePatches){
+                allKeys.add(localFeature.getFeatureVector().values);
+            }
+        }
+
+        // Performing K-Means clustering (creating 500 clusters)
+        FloatKMeans km = FloatKMeans.createKDTreeEnsemble(700);
+        float[][] dataSource = new float[allKeys.size()][];
+        for(int i = 0; i < allKeys.size(); i++){
+            dataSource[i] = allKeys.get(i);
+        }
+        FloatCentroidsResult result = km.cluster(dataSource);
+
+        return result.defaultHardAssigner();
+    }
+
+
+    // Method to get random patches from the feature list
+    static List<LocalFeature<SpatialLocation, FloatFV>> getRandomElements(List<LocalFeature<SpatialLocation, FloatFV>> patches, int numElements){
+        List<LocalFeature<SpatialLocation, FloatFV>> randomList = new ArrayList<>();
+
+        Random rand = new Random();
+
+        for(int i = 0; i < numElements; i++){
+            int index = rand.nextInt(patches.size());
+            randomList.add(patches.get(index));
+        }
+        return randomList;
+    }
+
+    static class Extractor implements FeatureExtractor<DoubleFV, FImage> {
+        HardAssigner<float[], float[], IntFloatPair> assigner;
+
+        public Extractor(HardAssigner<float[], float[], IntFloatPair> assigner) {
+            this.assigner = assigner;
+        }
+
+        @Override
+        public DoubleFV extractFeature(FImage image) {
+
+            // Bag of Visual Words uses the Hard Assigner to assign each feature to a visual word and compute the histograms
+            final BagOfVisualWords<float[]> bagOfVisualWords = new BagOfVisualWords<>(assigner);
+            final BlockSpatialAggregator<float[], SparseIntFV> blockSpatial = new BlockSpatialAggregator<>(bagOfVisualWords, 2, 2);
+            final List<LocalFeature<SpatialLocation, FloatFV>> extractedFeature = patchExtraction(image);
+            // Appending and normalising the spatial histograms
+            return blockSpatial.aggregate(extractedFeature, image.getBounds()).normaliseFV();
+        }
     }
 }
