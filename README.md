@@ -25,3 +25,5 @@ We came to the conclusion that we cannot train a neural network from scratch wit
 On the VGG16 we tested with an image size of (64,64) and got an accuracy of approximately 70%, while with the InceptionV3 the performance of the algorithm with a smaller image size was lower (approx. 60%). On InceptionV3 we tested with the initial image size (255,255) and the accuracy increased dramatically, reaching 90% accuracy. A downside to this improvement was that the computational power increased with the size of the target image.
 
 The final solution uses transfer learning with InceptionV3, which requires an image of size (255,255) and uses a batch size of 64 and 50 epochs for fitting the model. In the end, the model was trained on the entire data set and produced the class predictions of each image from the testing folder, but the model trained on the training data split into testing and training, the accuracy was approximately 90%. We expect that the accuracy will increase now that we used the entire training data to train the model.
+
+![fig1](https://user-images.githubusercontent.com/37437735/147774039-c5dd7fb7-19af-419a-9d0e-c3a4674008c0.PNG)
