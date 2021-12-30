@@ -1,5 +1,10 @@
 # Scene Recognition
 
+Classifying images in three ways, using machine learning:
+- run1: k-nearest-neighbours, OpenImaj
+- run2: linear classifiers, OpenImaj
+- run3: InceptionV3 pretrained model on Imagenet, Python
+
 ## Run1
 
 To implement the tiny image K-nearest-neighbours classifier first we iterated through every image in every group, extracting the feature vector. This involved making the image square by taking the size of its smallest dimension and then cropping the image to a square of this size. This image was then resized to the suggested resolution of 16x16. Finally, this image was normalised using a built-in OpenIMAJfunction, producing the feature vector.
